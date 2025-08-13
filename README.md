@@ -1,4 +1,4 @@
-# java-creator.nvim
+# java-creator-nvim
 
 <!--toc:start-->
 - [java-creator.nvim](#java-creatornvim)
