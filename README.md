@@ -10,11 +10,9 @@
   - [Configuration](#configuration)
 <!--toc:end-->
 
-A Neovim plugin for generating Java files with proper package structure.
+This plugin was created to help generate Java class files like in different IDEs, in an interactive way that allows you to choose which package to place it in and to create a new one if needed. When creating the file, it automatically sets the file's package so you don't have to do it manually.
 
 ## Features
-
-This plugin was created to help generate various types of Java files like in different IDEs, in an interactive way that allows you to choose which package to place it in and to create a new one if needed. When creating the file, it automatically sets the file's package so you don't have to do it manually.
 
 - Supports:
   - Classes
@@ -23,10 +21,11 @@ This plugin was created to help generate various types of Java files like in dif
   - Records (Java 16+)
   - Abstract classes
 - Automatic package detection
+- Check file/package name validity
 
 ## Installation
 
-With [Lazy.nvim](https://github.com/folke/lazy.nvim):
+Using [Lazy.nvim](https://github.com/folke/lazy.nvim), with basic configuration:
 
 ```lua
 {
@@ -45,15 +44,48 @@ With [Lazy.nvim](https://github.com/folke/lazy.nvim):
 }
 ```
 
-## Installation
-
-With Lazy.nvim:
+Suggested configuration is:
 
 ```lua
 {
-  'alessandrodellaquila/java-creator.nvim',
-  ft = 'java',
-  opts = {} -- optional config
+  {
+    "alessio-vivaldelli/java-creator-nvim",
+    config = function()
+      require("java-creator").setup({
+        options = {
+          java_version = 17,
+          auto_open = true,
+          use_notify = true,
+          custom_src_path = "backend/src/main/java",
+          src_patterns = { "src/main/java", "src/test/java", "src" },
+          project_markers = { "pom.xml", "build.gradle", "settings.gradle", ".project", "backend" },
+          package_selection_style = "hybrid",
+          notification_timeout = 3000,
+        },
+        keymaps = {
+          java_new = "<leader>jn",
+          java_class = "<leader>jc",
+          java_interface = "<leader>ji",
+          java_enum = "<leader>je",
+          java_record = "<leader>jr",
+        },
+        default_imports = {
+          record = { "java.util.*" }, -- Import di default per i record
+        },
+      })
+
+      vim.keymap.set("i", "<C-space>", 'pumvisible() ? "\\<C-n>" : "\\<C-x>\\<C-u>"', {
+        expr = true,
+        desc = "",
+      })
+    end,
+    ft = "java",
+    event = "VeryLazy",
+    dependencies = {
+      { "nvim-telescope/telescope.nvim", optional = true },
+      { "rcarriga/nvim-notify", optional = true },
+    },
+  },
 }
 ```
 
@@ -76,8 +108,6 @@ You can also set keymaps to bind this operation.
 All configuration are:
 
 ```lua
--- Configuration for java-creator-nvim
-require('java-creator-nvim').setup({
   -- Customize templates for Java types
   templates = {
     class = [[package %s;
@@ -142,8 +172,6 @@ public abstract class %s {
     },
     custom_src_path = nil,       -- Custom source path (optional)
     package_selection_style = "hybrid", -- Package selection style: "auto", "menu", or "hybrid"
-  },
-})
 ```
 
 - **Templates**: Customize the initial content for different Java file types.
