@@ -425,7 +425,17 @@ function utils.generate_file_path(package, name, java_type)
 	if package and package ~= "" then
 		local package_path = package:gsub("%.", "/")
 		local full_dir = src_dir .. "/" .. package_path
-		vim.fn.mkdir(full_dir, "p")
+
+		-- Create all directories in the package path recursively
+		local parts = vim.split(package_path, "/")
+		local current_path = src_dir
+		for _, part in ipairs(parts) do
+			current_path = current_path .. "/" .. part
+			if vim.fn.isdirectory(current_path) == 0 then
+				vim.fn.mkdir(current_path, "p")
+			end
+		end
+
 		return full_dir .. "/" .. name .. ".java"
 	else
 		return src_dir .. "/" .. name .. ".java"
