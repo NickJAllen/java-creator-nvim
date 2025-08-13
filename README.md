@@ -3,6 +3,9 @@
 <!--toc:start-->
 - [java-creator.nvim](#java-creatornvim)
   - [Features](#features)
+  - [Demo](#demo)
+    - [Create new class inside an existing package](#create-new-class-inside-an-existing-package)
+    - [Create new class inside a new package](#create-new-class-inside-a-new-package)
   - [Installation](#installation)
   - [Usage](#usage)
     - [Basic Commands](#basic-commands)
