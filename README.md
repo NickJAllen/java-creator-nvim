@@ -4,7 +4,6 @@
 - [java-creator.nvim](#java-creatornvim)
   - [Features](#features)
   - [Installation](#installation)
-  - [Installation](#installation)
   - [Usage](#usage)
     - [Basic Commands](#basic-commands)
   - [Configuration](#configuration)
