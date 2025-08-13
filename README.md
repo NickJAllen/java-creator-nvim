@@ -22,6 +22,16 @@ This plugin was created to help generate Java class files like in different IDEs
 - Automatic package detection
 - Check file/package name validity
 
+## Demo
+
+### Create new class inside an existing package
+
+![New class](./res/new-class.gif)
+
+### Create new class inside a new package
+
+![New package](./res/new-package.gif)
+
 ## Installation
 
 Using [Lazy.nvim](https://github.com/folke/lazy.nvim), with basic configuration:
