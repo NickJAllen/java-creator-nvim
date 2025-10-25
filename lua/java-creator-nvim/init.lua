@@ -211,14 +211,60 @@ function utils.validate_package_name(package)
 	return true
 end
 
+function utils.get_path_dir(path)
+	if path == nil or path == "" then
+		return nil
+	end
+
+	-- Make path absolute
+	local abs_path = vim.fn.fnamemodify(path, ":p")
+
+	-- Check if it's a directory
+	if vim.fn.isdirectory(abs_path) == 1 then
+		return abs_path -- keep directory as-is
+	else
+		-- It's a file, return parent directory
+		return vim.fn.fnamemodify(abs_path, ":h")
+	end
+end
+
+function utils.get_current_directory()
+	local buf = vim.api.nvim_get_current_buf()
+
+	if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf) then
+		local file_type = vim.bo[buf].filetype
+
+		if file_type == "neo-tree" then
+			local state = require("neo-tree.sources.manager").get_state("filesystem")
+			local node = state.tree:get_node()
+			local path = node:get_id()
+
+			return utils.get_path_dir(path)
+		end
+
+		local buffer_type = vim.bo[buf].buftype
+
+		if buffer_type == "" then
+			local filepath = vim.api.nvim_buf_get_name(buf)
+			print("Working on: " .. filepath)
+			local filedir = vim.fn.fnamemodify(filepath, ":p:h")
+			print("Using buffer directory " .. filedir .. " for finding java project root")
+			return filedir
+		end
+	end
+
+	print("No valid file buffer.")
+	return vim.fn.getcwd()
+end
+
 ---
 --- Finds the Java project root directory by searching for marker files.
 ---
----@param start_dir string|nil The directory to start searching from. Defaults to current working directory.
----@return string|nil The project root path or nil if not found.
-function utils.find_java_project_root(start_dir)
-	start_dir = start_dir or vim.fn.getcwd()
+function utils.find_java_project_root()
+	local start_dir = utils.get_current_directory()
 	local current_dir = start_dir
+
+	print("finding java project root from " .. start_dir)
 
 	while current_dir ~= "/" and current_dir ~= "" do
 		for _, marker in ipairs(M.config.options.project_markers) do
@@ -365,7 +411,7 @@ function utils.find_default_package()
 		return ""
 	end
 
-	local current_dir = vim.fn.getcwd()
+	local current_dir = utils.get_current_directory()
 
 	if current_dir:sub(1, #src_dir) == src_dir then
 		local relative_path = current_dir:sub(#src_dir + 2)
@@ -558,21 +604,26 @@ end
 ---@param default string The default package.
 ---@param callback function The function to call with the selected package.
 function input.get_package(prompt, default, callback)
+	print("Asking for package with default " .. default)
 	local src_dir = utils.get_package_base()
 	local available_packages = utils.find_available_packages()
+	local current_package_choice = default .. " (current package)"
+	local new_package_choice = "Create in a new package"
 
-	vim.ui.select({ "(new package)", unpack(available_packages) }, {
+	local package_choices = { current_package_choice, new_package_choice, unpack(available_packages) }
+
+	vim.ui.select(package_choices, {
 		prompt = prompt,
 		default = default,
 		format_item = function(item)
-			return item == "(new package)" and "✏️ " .. item or "📦 " .. item
+			return item == new_package_choice and "✏️ " .. item or "📦 " .. item
 		end,
 	}, function(choice)
 		if not choice then
 			return callback(nil) -- Cancel operation
 		end
 
-		if choice == "(new package)" then
+		if choice == new_package_choice then
 			vim.ui.select(available_packages, {
 				prompt = "Select base package:",
 				format_item = function(pkg)
@@ -602,6 +653,8 @@ function input.get_package(prompt, default, callback)
 					callback(input_text)
 				end)
 			end)
+		elseif choice == current_package_choice then
+			callback(default)
 		else
 			callback(choice)
 		end
@@ -697,6 +750,7 @@ function M.java_new()
 			end
 
 			local default_package = utils.find_default_package()
+			print("found default package " .. default_package)
 			input.get_package("Package: ", default_package, function(package)
 				if not package then
 					utils.info("Java file creation canceled.")
@@ -720,6 +774,7 @@ function M.create_java_type_direct(java_type)
 		end
 
 		local default_package = utils.find_default_package()
+		print("Found default package before directly creating " .. java_type .. ": " .. default_package)
 		input.get_package("Package: ", default_package, function(package)
 			if not package then
 				utils.info("Java file creation canceled.")
