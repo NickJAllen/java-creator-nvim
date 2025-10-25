@@ -228,6 +228,10 @@ function utils.get_path_dir(path)
 	end
 end
 
+-- Gets the current directory in an intelligent way.
+-- If the user is focused in neo-tree then it retuns the path to the current directory that is selected there.
+-- Otherwise, if the user is editing a file then it uses the current diretory of that file.
+-- If neither of those work then it returns vim.fn.getcwd()
 function utils.get_current_directory()
 	local buf = vim.api.nvim_get_current_buf()
 
