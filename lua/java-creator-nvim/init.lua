@@ -251,7 +251,7 @@ function utils.get_current_directory()
 			local prefix = "oil://"
 
 			if filepath:sub(1, #prefix) == prefix then
-				return filepath:sub(#prefix + 1)
+				return vim.fn.fnamemodify(filepath:sub(#prefix + 1), ":p:h")
 			end
 
 			print("Expected " .. prefix .. " for oil buffer location - ignoring")
