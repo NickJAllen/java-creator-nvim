@@ -31,14 +31,6 @@ public abstract class %s {
 }]],
 	},
 
-	default_imports = {
-		class = {},
-		interface = {},
-		enum = {},
-		record = { "java.util.*" },
-		abstract_class = {},
-	},
-
 	keymaps = {
 		java_new = "<leader>jn",
 		java_class = "<leader>jc",
@@ -53,9 +45,6 @@ public abstract class %s {
 		notification_timeout = 3000, -- Timeout for notifications in milliseconds
 		java_version = 17,
 		src_patterns = { "src/main/java", "src/test/java", "src" },
-		project_markers = { "pom.xml", "build.gradle", "settings.gradle", ".project", "backend" },
-		custom_src_path = nil,
-		package_selection_style = "hybrid", -- "auto", "menu" or "hybrid"
 	},
 }
 
@@ -83,7 +72,7 @@ function utils.notify(msg, level)
 		})
 	else
 		-- Fallback to the standard vim.notify
-		vim.notify(msg, { title = "Java Creator", level = level })
+		vim.notify(msg, level, { title = "Java Creator", level = level })
 	end
 end
 
@@ -192,25 +181,6 @@ function utils.validate_java_name(name)
 	return true
 end
 
----
---- Validates a Java package name.
----
----@param package string The package name to validate.
----@return boolean, string|nil True if valid, false and an error message otherwise.
-function utils.validate_package_name(package)
-	if package == "" or package == nil then
-		return true -- Default package is valid
-	end
-
-	for part in package:gmatch("[^%.]+") do
-		local valid, err = utils.validate_java_name(part)
-		if not valid then
-			return false, "Invalid package: " .. err
-		end
-	end
-	return true
-end
-
 function utils.get_path_dir(path)
 	if path == nil or path == "" then
 		return nil
@@ -232,7 +202,8 @@ end
 -- If the user is focused in neo-tree then it retuns the path to the current directory that is selected there.
 -- Otherwise, if the user is editing a file then it uses the current diretory of that file.
 -- If neither of those work then it returns vim.fn.getcwd()
-function utils.get_current_directory()
+--- @return string
+local function get_current_directory()
 	local buf = vim.api.nvim_get_current_buf()
 
 	if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf) then
@@ -243,7 +214,11 @@ function utils.get_current_directory()
 			local node = state.tree:get_node()
 			local path = node:get_id()
 
-			return utils.get_path_dir(path)
+			local dir = utils.get_path_dir(path)
+
+			if dir then
+				return dir
+			end
 		end
 
 		if file_type == "oil" then
@@ -262,186 +237,44 @@ function utils.get_current_directory()
 
 		if buffer_type == "" then
 			local filepath = vim.api.nvim_buf_get_name(buf)
-			print("Working on: " .. filepath)
-			local filedir = vim.fn.fnamemodify(filepath, ":p:h")
-			print("Using buffer directory " .. filedir .. " for finding java project root")
-			return filedir
+
+			return vim.fn.fnamemodify(filepath, ":p:h")
 		end
 	end
 
 	return vim.fn.getcwd()
 end
 
----
---- Finds the Java project root directory by searching for marker files.
----
-function utils.find_java_project_root()
-	local start_dir = utils.get_current_directory()
-	local current_dir = start_dir
+-- Tries to find the source directory and package name using the registered patterns for the supplied path
+--- @param path string
+--- @return string | nil source_dir_path
+--- @return string | nil package_name
+local function determine_source_directory_and_package_from_path(path)
+	for _, pattern in ipairs(M.config.options.src_patterns) do
+		local _, end_index = path:find("/" .. pattern .. "/")
 
-	print("finding java project root from " .. start_dir)
+		if end_index then
+			local source_dir_path = path:sub(1, end_index - 1)
+			local package_name = path:sub(end_index + 1):gsub("/", ".")
 
-	while current_dir ~= "/" and current_dir ~= "" do
-		for _, marker in ipairs(M.config.options.project_markers) do
-			local marker_path = current_dir .. "/" .. marker
-			if marker == "backend" then
-				if vim.fn.isdirectory(marker_path) == 1 and vim.fn.isdirectory(marker_path .. "/src") == 1 then
-					return current_dir
-				end
-			elseif vim.fn.filereadable(marker_path) == 1 or vim.fn.isdirectory(marker_path) == 1 then
-				return current_dir
-			end
-		end
-		current_dir = vim.fn.fnamemodify(current_dir, ":h")
-	end
-	return nil
-end
-
----
---- Finds the primary source directory (e.g., 'src/main/java') within a project.
----
----@param project_root string The project root path.
----@return string|nil The source directory path or nil if not found.
-function utils.find_java_src_dir(project_root)
-	if not project_root then
-		return nil
-	end
-
-	if M.config.options.custom_src_path then
-		local custom_path = project_root .. "/" .. M.config.options.custom_src_path
-		if vim.fn.isdirectory(custom_path) == 1 then
-			return custom_path
-		end
-	end
-
-	local nested_paths = { "", "backend", "src", "src/main/java" }
-
-	for _, nested_path in ipairs(nested_paths) do
-		local base_path = project_root
-		if nested_path ~= "" then
-			base_path = base_path .. "/" .. nested_path
-		end
-
-		for _, pattern in ipairs(M.config.options.src_patterns) do
-			local src_candidate = base_path .. "/" .. pattern
-			if vim.fn.isdirectory(src_candidate) == 1 then
-				return src_candidate
-			end
+			return source_dir_path, package_name
 		end
 	end
 
 	return nil
 end
 
----
---- Gets the base source directory for packages.
----
----@return string|nil The base package path or nil if not found.
-function utils.get_package_base()
-	local project_root = utils.find_java_project_root()
-	if not project_root then
-		return nil
-	end
-	return utils.find_java_src_dir(project_root)
-end
+--- @return string source_dir_path
+--- @return string package_name
+local function determine_source_directory_and_package()
+	local current_dir = get_current_directory()
+	local source_dir, package_name = determine_source_directory_and_package_from_path(current_dir)
 
----
---- Extracts the last part of a dot-separated package string.
----
----@param input string The full package string.
----@return string The last fragment of the package.
-function utils.get_current_package_fragment(input)
-	if not input or input == "" then
-		return ""
-	end
-	return input:match("([^.]+)$") or ""
-end
-
----
---- Finds package names matching a given fragment.
----
----@param base string The base source directory.
----@param fragment string The package fragment to search for.
----@return table A list of matching package names.
-function utils.get_package_matches(base, fragment)
-	local matches = {}
-	if not base or not fragment then
-		return matches
+	if source_dir then
+		return source_dir, package_name
 	end
 
-	local pattern = fragment:gsub("%.", "/")
-	local search_path = base .. "/**/" .. pattern .. "*/"
-	local dirs = vim.fn.glob(search_path, false, true)
-
-	for _, dir in ipairs(dirs) do
-		if dir:sub(1, #base) == base then
-			local relative = dir:sub(#base + 2, -2)
-			if relative ~= "" then
-				local package_name = relative:gsub("/", ".")
-				table.insert(matches, package_name)
-			end
-		end
-	end
-
-	return matches
-end
-
----
---- Finds all available packages within the source directory.
----
----@return table A sorted list of all found package names.
-function utils.find_available_packages()
-	local src_dir = utils.get_package_base()
-	if not src_dir then
-		return {}
-	end
-
-	local packages = {}
-	local dirs = vim.fn.glob(src_dir .. "/**/", false, true)
-
-	for _, dir in ipairs(dirs) do
-		if dir:sub(1, #src_dir) == src_dir then
-			local relative = dir:sub(#src_dir + 2, -2)
-			if relative ~= "" then
-				local package_name = relative:gsub("/", ".")
-				table.insert(packages, package_name)
-			end
-		end
-	end
-
-	table.sort(packages, function(a, b)
-		return #a < #b -- Sort by increasing length
-	end)
-
-	return packages
-end
-
----
---- Tries to determine the default package based on the current directory or open files.
----
----@return string The determined default package name.
-function utils.find_default_package()
-	local src_dir = utils.get_package_base()
-	if not src_dir then
-		return ""
-	end
-
-	local current_dir = utils.get_current_directory()
-
-	if current_dir:sub(1, #src_dir) == src_dir then
-		local relative_path = current_dir:sub(#src_dir + 2)
-		return relative_path:gsub("/", ".")
-	end
-
-	local java_files = vim.fn.glob(current_dir .. "/*.java", false, true)
-	for _, file in ipairs(java_files) do
-		local package = utils.extract_package_from_file(file)
-		if package then
-			return package
-		end
-	end
-
-	return ""
+	return current_dir, ""
 end
 
 ---
@@ -476,13 +309,11 @@ end
 ---
 --- Generates the full file path for a new Java file.
 ---
+---@param src_dir string
 ---@param package string The package name.
 ---@param name string The class/interface/enum name.
----@param java_type string The type of Java file (e.g., 'class').
 ---@return string The generated file path.
-function utils.generate_file_path(package, name, java_type)
-	local src_dir = utils.get_package_base() or vim.fn.getcwd()
-
+function utils.generate_file_path(src_dir, package, name)
 	if package and package ~= "" then
 		local package_path = package:gsub("%.", "/")
 		local full_dir = src_dir .. "/" .. package_path
@@ -519,16 +350,6 @@ function utils.generate_file_content(java_type, package, name)
 	-- Generate base content without package first
 	local base_content = string.format(template, "", name):gsub("package ;\n\n", "")
 
-	-- Add default imports
-	local imports = M.config.default_imports[java_type] or {}
-	local import_lines = ""
-	if #imports > 0 then
-		for _, import in ipairs(imports) do
-			import_lines = import_lines .. "import " .. import .. ";\n"
-		end
-		import_lines = import_lines .. "\n"
-	end
-
 	-- Build the package line (only if specified)
 	local package_line = ""
 	if package and package ~= "" then
@@ -542,13 +363,12 @@ function utils.generate_file_content(java_type, package, name)
     
 }]],
 			package_line,
-			import_lines,
 			name
 		)
 	end
 
 	-- Combine all parts
-	return package_line .. import_lines .. base_content
+	return package_line .. base_content
 end
 
 local input = {}
@@ -563,7 +383,7 @@ function input.get_java_type(callback)
 		class = "Class",
 		interface = "Interface",
 		enum = "Enum",
-		record = "Record" .. (M.config.options.java_version < 14 and " (Java 14+)" or ""),
+		record = "Record",
 		abstract_class = "Abstract Class",
 	}
 
@@ -589,133 +409,19 @@ function input.get_string(prompt, default, callback)
 end
 
 ---
---- Prompts for package input with completion.
----
----@param prompt string The prompt message.
----@param default string The default value.
----@param callback function The callback function.
----@param src_dir string The source directory for completion.
-function input.get_package_input(prompt, default, callback, src_dir)
-	vim.ui.input({
-		prompt = prompt,
-		default = default or "",
-		completion = function(arg_lead)
-			if not src_dir then
-				return {}
-			end
-			local fragment = utils.get_current_package_fragment(arg_lead)
-			if fragment == "" then
-				return {}
-			end
-			return utils.get_package_matches(src_dir, fragment)
-		end,
-	}, callback)
-end
-
----
---- Prompts the user to select or create a package.
----
----@param prompt string The prompt message.
----@param default string The default package.
----@param callback function The function to call with the selected package.
-function input.get_package(prompt, default, callback)
-	print("Asking for package with default " .. default)
-	local src_dir = utils.get_package_base()
-	local available_packages = utils.find_available_packages()
-	local current_package_choice = default .. " (current package)"
-	local new_package_choice = "Create in a new package"
-
-	local package_choices = { current_package_choice, new_package_choice, unpack(available_packages) }
-
-	vim.ui.select(package_choices, {
-		prompt = prompt,
-		default = default,
-		format_item = function(item)
-			return item == new_package_choice and "✏️ " .. item or "📦 " .. item
-		end,
-	}, function(choice)
-		if not choice then
-			return callback(nil) -- Cancel operation
-		end
-
-		if choice == new_package_choice then
-			vim.ui.select(available_packages, {
-				prompt = "Select base package:",
-				format_item = function(pkg)
-					return "✏️ " .. pkg
-				end,
-			}, function(selected_pkg)
-				if not selected_pkg then
-					return callback(nil) -- Cancel operation
-				end
-
-				vim.ui.input({
-					prompt = "New package: ",
-					default = selected_pkg or "",
-					completion = function(arg_lead)
-						local matches = {}
-						for _, p in ipairs(available_packages) do
-							if p:find(arg_lead, 1, true) == 1 then
-								table.insert(matches, p)
-							end
-						end
-						return matches
-					end,
-				}, function(input_text)
-					if not input_text then
-						return callback(nil) -- Cancel operation
-					end
-					callback(input_text)
-				end)
-			end)
-		elseif choice == current_package_choice then
-			callback(default)
-		else
-			callback(choice)
-		end
-	end)
-end
-
----
---- Provides completion for package names.
---- Used for command-line completion.
----
----@param arg_lead string The leading part of the argument.
----@return table A list of matching package names.
-function M.complete_packages(arg_lead, cmd_line, cursor_pos)
-	local src_dir = utils.get_package_base()
-	if not src_dir then
-		return {}
-	end
-	local fragment = utils.get_current_package_fragment(arg_lead)
-	return utils.get_package_matches(src_dir, fragment)
-end
-
----
 --- Creates the Java file after validating inputs.
 ---
 ---@param java_type string The type of Java file.
 ---@param name string The class/interface/enum name.
 ---@param package string The package name.
-function M.create_java_file(java_type, name, package)
-	if java_type == "record" and M.config.options.java_version < 14 then
-		utils.error("Records require Java 14 or higher. Current version: " .. M.config.options.java_version)
-		return
-	end
-
+function M.create_java_file(java_type, name, source_dir, package)
 	local valid, err = utils.validate_java_name(name)
 	if not valid then
 		utils.error("Invalid name: " .. err)
 		return
 	end
 
-	valid, err = utils.validate_package_name(package)
-	if not valid then
-		utils.error("Invalid package: " .. err)
-		return
-	end
-
-	local file_path = utils.generate_file_path(package, name, java_type)
+	local file_path = utils.generate_file_path(source_dir, package, name)
 	if vim.fn.filereadable(file_path) == 1 then
 		utils.error("File already exists: " .. file_path)
 		return
@@ -754,26 +460,7 @@ function M.java_new()
 			return
 		end
 
-		input.get_string("Name for " .. java_type .. ": ", "", function(name)
-			if not name then
-				utils.info("Java file creation canceled.")
-				return
-			end
-			if name == "" then
-				utils.error("Name is required.")
-				return
-			end
-
-			local default_package = utils.find_default_package()
-			print("found default package " .. default_package)
-			input.get_package("Package: ", default_package, function(package)
-				if not package then
-					utils.info("Java file creation canceled.")
-					return
-				end
-				M.create_java_file(java_type, name, package)
-			end)
-		end)
+		M.create_java_type_direct(java_type)
 	end)
 end
 
@@ -788,15 +475,9 @@ function M.create_java_type_direct(java_type)
 			return
 		end
 
-		local default_package = utils.find_default_package()
-		print("Found default package before directly creating " .. java_type .. ": " .. default_package)
-		input.get_package("Package: ", default_package, function(package)
-			if not package then
-				utils.info("Java file creation canceled.")
-				return
-			end
-			M.create_java_file(java_type, name, package)
-		end)
+		local source_dir, package_name = determine_source_directory_and_package()
+
+		M.create_java_file(java_type, name, source_dir, package_name)
 	end)
 end
 
