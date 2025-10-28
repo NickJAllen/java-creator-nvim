@@ -43,12 +43,9 @@ public abstract class %s {
 		auto_open = true,
 		use_notify = true, -- Set to false to disable all notifications from this plugin
 		notification_timeout = 3000, -- Timeout for notifications in milliseconds
-		java_version = 17,
 		src_patterns = { "src/main/java", "src/test/java", "src" },
 	},
 }
-
-local utils = {}
 
 ---
 --- Sends a notification to the user if enabled in the config.
@@ -56,7 +53,7 @@ local utils = {}
 ---
 ---@param msg string The message to display.
 ---@param level vim.log.levels The notification level (e.g., INFO, ERROR).
-function utils.notify(msg, level)
+local function notify(msg, level)
 	if not M.config.options.use_notify then
 		return -- Do nothing if notifications are disabled
 	end
@@ -80,24 +77,16 @@ end
 --- Displays an error message.
 ---
 ---@param msg string The error message.
-function utils.error(msg)
-	utils.notify(msg, vim.log.levels.ERROR)
+local function error(msg)
+	notify(msg, vim.log.levels.ERROR)
 end
 
 ---
 --- Displays an informational message.
 ---
 ---@param msg string The info message.
-function utils.info(msg)
-	utils.notify(msg, vim.log.levels.INFO)
-end
-
----
---- Displays a warning message.
----
----@param msg string The warning message.
-function utils.warn(msg)
-	utils.notify(msg, vim.log.levels.WARN)
+local function info(msg)
+	notify(msg, vim.log.levels.INFO)
 end
 
 ---
@@ -105,7 +94,7 @@ end
 ---
 ---@param name string The identifier to validate.
 ---@return boolean, string|nil True if valid, false and an error message otherwise.
-function utils.validate_java_name(name)
+local function validate_java_name(name)
 	if not name or name == "" then
 		return false, "Name cannot be empty"
 	end
@@ -181,7 +170,7 @@ function utils.validate_java_name(name)
 	return true
 end
 
-function utils.get_path_dir(path)
+local function get_path_dir(path)
 	if path == nil or path == "" then
 		return nil
 	end
@@ -214,7 +203,7 @@ local function get_current_directory()
 			local node = state.tree:get_node()
 			local path = node:get_id()
 
-			local dir = utils.get_path_dir(path)
+			local dir = get_path_dir(path)
 
 			if dir then
 				return dir
@@ -324,43 +313,13 @@ local function determine_source_directory_and_package()
 end
 
 ---
---- Extracts the package declaration from a Java file.
----
----@param file string The path to the Java file.
----@return string|nil The package name or nil if not found.
-function utils.extract_package_from_file(file)
-	local content = utils.read_file(file)
-
-	if content then
-		return get_package_from_java_source_code(content)
-	end
-
-	return nil
-end
-
----
---- Reads the entire content of a file.
----
----@param file string The path to the file.
----@return string|nil The file content or nil on failure.
-function utils.read_file(file)
-	local f = io.open(file, "r")
-	if not f then
-		return nil
-	end
-	local content = f:read("*all")
-	f:close()
-	return content
-end
-
----
 --- Generates the content for a new Java file from a template.
 ---
 ---@param java_type string The type of Java file.
----@param package string The package name.
+---@param package_name string The package name.
 ---@param name string The class/interface/enum name.
 ---@return string|nil, string|nil The file content, or nil and an error message.
-function utils.generate_file_content(java_type, package, name)
+local function generate_file_content(java_type, package_name, name)
 	local template = M.config.templates[java_type]
 	if not template then
 		return nil, "Template not found for type: " .. java_type
@@ -371,14 +330,14 @@ function utils.generate_file_content(java_type, package, name)
 
 	-- Build the package line (only if specified)
 	local package_line = ""
-	if package and package ~= "" then
-		package_line = "package " .. package .. ";\n\n"
+	if package_name and package_name ~= "" then
+		package_line = "package " .. package_name .. ";\n\n"
 	end
 
 	-- Handle record template separately for proper formatting
 	if java_type == "record" then
 		return string.format(
-			[[%s%spublic record %s() {
+			[[%spublic record %s() {
     
 }]],
 			package_line,
@@ -396,7 +355,7 @@ local input = {}
 --- Prompts the user to select a Java type.
 ---
 ---@param callback function The function to call with the selected type.
-function input.get_java_type(callback)
+local function get_java_type(callback)
 	local types = { "class", "interface", "enum", "record", "abstract_class" }
 	local type_labels = {
 		class = "Class",
@@ -432,29 +391,29 @@ end
 ---
 ---@param java_type string The type of Java file.
 ---@param name string The class/interface/enum name.
----@param package string The package name.
-function M.create_java_file(java_type, name, source_dir, package)
-	local valid, err = utils.validate_java_name(name)
+---@param package_name string The package name.
+function M.create_java_file(java_type, name, source_dir, package_name)
+	local valid, err = validate_java_name(name)
 	if not valid then
-		utils.error("Invalid name: " .. err)
+		error("Invalid name: " .. err)
 		return
 	end
 
 	local file_path = source_dir .. "/" .. name .. ".java"
 	if vim.fn.filereadable(file_path) == 1 then
-		utils.error("File already exists: " .. file_path)
+		error("File already exists: " .. file_path)
 		return
 	end
 
-	local content, err_msg = utils.generate_file_content(java_type, package, name)
+	local content, err_msg = generate_file_content(java_type, package_name, name)
 	if not content then
-		utils.error("Error generating content: " .. err_msg)
+		error("Error generating content: " .. err_msg)
 		return
 	end
 
 	local file = io.open(file_path, "w")
 	if not file then
-		utils.error("Could not create file: " .. file_path)
+		error("Could not create file: " .. file_path)
 		return
 	end
 
@@ -465,7 +424,7 @@ function M.create_java_file(java_type, name, source_dir, package)
 		vim.cmd("edit " .. file_path)
 	end
 
-	utils.info(string.format("Created %s: %s", java_type, file_path))
+	info(string.format("Created %s: %s", java_type, file_path))
 end
 
 ---
@@ -473,9 +432,9 @@ end
 --- It guides the user through selecting type, name, and package.
 ---
 function M.java_new()
-	input.get_java_type(function(java_type)
+	get_java_type(function(java_type)
 		if not java_type then
-			utils.info("Java file creation canceled.")
+			info("Java file creation canceled.")
 			return
 		end
 
@@ -490,7 +449,7 @@ end
 function M.create_java_type_direct(java_type)
 	input.get_string("Name for " .. java_type .. ": ", "", function(name)
 		if not name or name == "" then
-			utils.error("Name is required.")
+			error("Name is required.")
 			return
 		end
 
@@ -553,7 +512,7 @@ function M.setup(opts)
 		end
 	end
 
-	utils.info("Java Creator plugin loaded")
+	info("Java Creator plugin loaded")
 end
 
 return M
