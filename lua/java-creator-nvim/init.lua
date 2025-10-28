@@ -245,6 +245,13 @@ local function get_current_directory()
 	return vim.fn.getcwd()
 end
 
+--- @param str string
+--- @param ending string
+--- @return boolean
+function string.ends_with(str, ending)
+	return ending == "" or str:sub(-#ending) == ending
+end
+
 -- Tries to find the source directory and package name using the registered patterns for the supplied path
 --- @param path string
 --- @return string | nil source_dir_path
@@ -254,23 +261,62 @@ local function determine_source_directory_and_package_from_path(path)
 		local _, end_index = path:find("/" .. pattern .. "/")
 
 		if end_index then
-			local source_dir_path = path:sub(1, end_index - 1)
 			local package_name = path:sub(end_index + 1):gsub("/", ".")
 
-			return source_dir_path, package_name
+			return path, package_name
+		elseif path:ends_with("/" .. pattern) then
+			return path, ""
 		end
 	end
 
 	return nil
 end
 
+---@param java_source_code string
+---@return string | nil
+local function get_package_from_java_source_code(java_source_code)
+	return java_source_code:match("package%s+([^;]+);")
+end
+
+--- @param buffer_id integer
+--- @return string | nil source_dir_path
+--- @return string | nil package_name
+local function determine_source_directory_and_package_from_buffer(buffer_id)
+	local path = vim.api.nvim_buf_get_name(buffer_id)
+
+	if not path:ends_with(".java") then
+		return nil
+	end
+
+	local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, true)
+
+	for _, line in ipairs(lines) do
+		local package_name = get_package_from_java_source_code(line)
+
+		if package_name then
+			local buffer_dir = vim.fn.fnamemodify(path, ":p:h")
+
+			return buffer_dir, package_name
+		end
+	end
+end
+
 --- @return string source_dir_path
 --- @return string package_name
 local function determine_source_directory_and_package()
 	local current_dir = get_current_directory()
+
 	local source_dir, package_name = determine_source_directory_and_package_from_path(current_dir)
 
-	if source_dir then
+	if source_dir and package_name then
+		return source_dir, package_name
+	end
+
+	local current_buffer = vim.api.nvim_get_current_buf()
+
+	source_dir, package_name = determine_source_directory_and_package_from_buffer(current_buffer)
+
+	if source_dir and package_name then
 		return source_dir, package_name
 	end
 
@@ -284,10 +330,11 @@ end
 ---@return string|nil The package name or nil if not found.
 function utils.extract_package_from_file(file)
 	local content = utils.read_file(file)
+
 	if content then
-		local package_match = content:match("package%s+([^;]+);")
-		return package_match
+		return get_package_from_java_source_code(content)
 	end
+
 	return nil
 end
 
@@ -304,34 +351,6 @@ function utils.read_file(file)
 	local content = f:read("*all")
 	f:close()
 	return content
-end
-
----
---- Generates the full file path for a new Java file.
----
----@param src_dir string
----@param package string The package name.
----@param name string The class/interface/enum name.
----@return string The generated file path.
-function utils.generate_file_path(src_dir, package, name)
-	if package and package ~= "" then
-		local package_path = package:gsub("%.", "/")
-		local full_dir = src_dir .. "/" .. package_path
-
-		-- Create all directories in the package path recursively
-		local parts = vim.split(package_path, "/")
-		local current_path = src_dir
-		for _, part in ipairs(parts) do
-			current_path = current_path .. "/" .. part
-			if vim.fn.isdirectory(current_path) == 0 then
-				vim.fn.mkdir(current_path, "p")
-			end
-		end
-
-		return full_dir .. "/" .. name .. ".java"
-	else
-		return src_dir .. "/" .. name .. ".java"
-	end
 end
 
 ---
@@ -421,7 +440,7 @@ function M.create_java_file(java_type, name, source_dir, package)
 		return
 	end
 
-	local file_path = utils.generate_file_path(source_dir, package, name)
+	local file_path = source_dir .. "/" .. name .. ".java"
 	if vim.fn.filereadable(file_path) == 1 then
 		utils.error("File already exists: " .. file_path)
 		return
