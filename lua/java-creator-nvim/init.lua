@@ -269,7 +269,6 @@ function utils.get_current_directory()
 		end
 	end
 
-	print("No valid file buffer.")
 	return vim.fn.getcwd()
 end
 
