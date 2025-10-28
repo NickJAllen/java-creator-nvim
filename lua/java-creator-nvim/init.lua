@@ -246,6 +246,18 @@ function utils.get_current_directory()
 			return utils.get_path_dir(path)
 		end
 
+		if file_type == "oil" then
+			local filepath = vim.api.nvim_buf_get_name(buf)
+			local prefix = "oil://"
+
+			if filepath:sub(1, #prefix) == prefix then
+				return filepath:sub(#prefix + 1)
+			end
+
+			print("Expected " .. prefix .. " for oil buffer location - ignoring")
+			return vim.fn.getcwd()
+		end
+
 		local buffer_type = vim.bo[buf].buftype
 
 		if buffer_type == "" then
