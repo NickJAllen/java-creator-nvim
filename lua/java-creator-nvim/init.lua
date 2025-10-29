@@ -4,30 +4,25 @@ local M = {}
 -- Default configuration
 M.config = {
 	templates = {
-		class = [[package %s;
-
-public class %s {
+		class = [[${package_decl};
+public class ${name} {
+    ${pos}
+}]],
+		interface = [[${package_decl};
+public interface ${name} {
+    ${pos}
+}]],
+		enum = [[${package_decl};
+public enum ${name} {
+    ${pos}
+}]],
+		record = [[${package_decl};
+public record ${name}(${pos}) {
     
 }]],
-		interface = [[package %s;
-
-public interface %s {
-    
-}]],
-		enum = [[package %s;
-
-public enum %s {
-    
-}]],
-		record = [[package %s;
-
-public record %s() {
-    
-}]],
-		abstract_class = [[package %s;
-
-public abstract class %s {
-    
+		abstract_class = [[${package_decl};
+public abstract class ${name} {
+    ${pos} 
 }]],
 	},
 
@@ -312,41 +307,48 @@ local function determine_source_directory_and_package()
 	return current_dir, ""
 end
 
----
---- Generates the content for a new Java file from a template.
----
----@param java_type string The type of Java file.
----@param package_name string The package name.
----@param name string The class/interface/enum name.
----@return string|nil, string|nil The file content, or nil and an error message.
-local function generate_file_content(java_type, package_name, name)
-	local template = M.config.templates[java_type]
-	if not template then
-		return nil, "Template not found for type: " .. java_type
+---@return integer, integer | nil
+local function find_line_col(text, substring)
+	-- Split text into lines
+	local lines = vim.split(text, "\n", { plain = true })
+
+	for line_num, line_text in ipairs(lines) do
+		local col = string.find(line_text, substring, 1, true) -- plain text search
+		if col then
+			col = col - 1 -- make 0-indexed (Neovim style)
+			return line_num, col
+		end
 	end
 
-	-- Generate base content without package first
-	local base_content = string.format(template, "", name):gsub("package ;\n\n", "")
+	return nil -- not found
+end
 
-	-- Build the package line (only if specified)
-	local package_line = ""
-	if package_name and package_name ~= "" then
-		package_line = "package " .. package_name .. ";\n\n"
+--- @param template_source string
+--- @param package_name string
+--- @param name string
+--- @return string result
+--- @return integer cursor_line
+--- @return integer cursor_column
+local function instantiate_template(template_source, package_name, name)
+	local package_decl = ""
+
+	if package_name ~= "" then
+		package_decl = "package " .. package_name .. ";\n\n"
 	end
 
-	-- Handle record template separately for proper formatting
-	if java_type == "record" then
-		return string.format(
-			[[%spublic record %s() {
-    
-}]],
-			package_line,
-			name
-		)
+	local result = template_source:gsub("${package_decl}", package_decl)
+	result = result:gsub("${name}", name)
+
+	local cursor_line, cursor_col = find_line_col(result, "${pos}")
+
+	if cursor_line and cursor_col then
+		result = result:gsub("${pos}", "")
+	else
+		cursor_line = 0
+		cursor_col = 0
 	end
 
-	-- Combine all parts
-	return package_line .. base_content
+	return result, cursor_line, cursor_col
 end
 
 local input = {}
@@ -405,11 +407,13 @@ function M.create_java_file(java_type, name, source_dir, package_name)
 		return
 	end
 
-	local content, err_msg = generate_file_content(java_type, package_name, name)
-	if not content then
-		error("Error generating content: " .. err_msg)
+	local template = M.config.templates[java_type]
+	if not template then
+		error("Template not found for type: " .. java_type)
 		return
 	end
+
+	local content, cursor_line, cursor_col = instantiate_template(template, package_name, name)
 
 	local file = io.open(file_path, "w")
 	if not file then
@@ -422,6 +426,7 @@ function M.create_java_file(java_type, name, source_dir, package_name)
 
 	if M.config.options.auto_open then
 		vim.cmd("edit " .. file_path)
+		vim.api.nvim_win_set_cursor(0, { cursor_line, cursor_col })
 	end
 
 	info(string.format("Created %s: %s", java_type, file_path))
