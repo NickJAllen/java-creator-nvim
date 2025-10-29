@@ -4,24 +4,19 @@ local M = {}
 -- Default configuration
 M.config = {
 	templates = {
-		class = [[${package_decl};
-public class ${name} {
+		class = [[${package_decl}public class ${name} {
     ${pos}
 }]],
-		interface = [[${package_decl};
-public interface ${name} {
+		interface = [[${package_decl}public interface ${name} {
     ${pos}
 }]],
-		enum = [[${package_decl};
-public enum ${name} {
+		enum = [[${package_decl}public enum ${name} {
     ${pos}
 }]],
-		record = [[${package_decl};
-public record ${name}(${pos}) {
+		record = [[${package_decl}public record ${name}(${pos}) {
     
 }]],
-		abstract_class = [[${package_decl};
-public abstract class ${name} {
+		abstract_class = [[${package_decl}public abstract class ${name} {
     ${pos} 
 }]],
 	},
@@ -307,7 +302,9 @@ local function determine_source_directory_and_package()
 	return current_dir, ""
 end
 
----@return integer, integer | nil
+---@param text string
+---@param substring string
+---@return integer | nil, integer | nil
 local function find_line_col(text, substring)
 	-- Split text into lines
 	local lines = vim.split(text, "\n", { plain = true })
@@ -320,7 +317,7 @@ local function find_line_col(text, substring)
 		end
 	end
 
-	return nil -- not found
+	return nil, nil
 end
 
 --- @param template_source string
@@ -333,6 +330,7 @@ local function instantiate_template(template_source, package_name, name)
 	local package_decl = ""
 
 	if package_name ~= "" then
+		print('package name = "' .. package_name .. '"')
 		package_decl = "package " .. package_name .. ";\n\n"
 	end
 
