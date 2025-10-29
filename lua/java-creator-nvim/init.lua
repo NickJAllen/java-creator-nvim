@@ -1,6 +1,8 @@
 -- lua/java-creator-nvim/init.lua
 local M = {}
 
+local log = require("plenary.log").new({ plugin = "java-creator" })
+
 -- Default configuration
 M.config = {
 	templates = {
@@ -208,7 +210,7 @@ local function get_current_directory()
 				return vim.fn.fnamemodify(filepath:sub(#prefix + 1), ":p:h")
 			end
 
-			print("Expected " .. prefix .. " for oil buffer location - ignoring")
+			log.error("Expected " .. prefix .. " for oil buffer location - ignoring")
 			return vim.fn.getcwd()
 		end
 
@@ -288,7 +290,7 @@ local function determine_source_directory_and_package()
 	local source_dir, package_name = determine_source_directory_and_package_from_path(current_dir)
 
 	if source_dir and package_name then
-		print("Found source dir " .. source_dir .. " and package " .. package_name .. " from path " .. current_dir)
+		log.info("Found source dir " .. source_dir .. " and package " .. package_name .. " from path " .. current_dir)
 		return source_dir, package_name
 	end
 
@@ -297,11 +299,11 @@ local function determine_source_directory_and_package()
 	source_dir, package_name = determine_source_directory_and_package_from_buffer(current_buffer)
 
 	if source_dir and package_name then
-		print("Found source dir " .. source_dir .. " and package " .. package_name .. " from current buffer")
+		log.info("Found source dir " .. source_dir .. " and package " .. package_name .. " from current buffer")
 		return source_dir, package_name
 	end
 
-	print("Could not determine source directory and package name")
+	log.error("Could not determine source directory and package name")
 	return current_dir, ""
 end
 
@@ -333,7 +335,6 @@ local function instantiate_template(template_source, package_name, name)
 	local package_decl = ""
 
 	if package_name ~= "" then
-		print('package name = "' .. package_name .. '"')
 		package_decl = "package " .. package_name .. ";\n\n"
 	end
 
