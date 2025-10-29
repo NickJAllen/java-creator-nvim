@@ -1,7 +1,7 @@
 -- lua/java-creator-nvim/init.lua
 local M = {}
 
-local log = require("plenary.log").new({ plugin = "java-creator" })
+local log = require("plenary.log").new({ plugin = "java-creator", level = "info" })
 
 -- Default configuration
 M.config = {
@@ -32,54 +32,9 @@ M.config = {
 	},
 
 	options = {
-		auto_open = true,
-		use_notify = true, -- Set to false to disable all notifications from this plugin
-		notification_timeout = 3000, -- Timeout for notifications in milliseconds
 		src_patterns = { "src/main/java", "src/test/java", "src" },
 	},
 }
-
----
---- Sends a notification to the user if enabled in the config.
---- Uses 'nvim-notify' if available, otherwise falls back to vim.notify.
----
----@param msg string The message to display.
----@param level vim.log.levels The notification level (e.g., INFO, ERROR).
-local function notify(msg, level)
-	if not M.config.options.use_notify then
-		return -- Do nothing if notifications are disabled
-	end
-
-	level = level or vim.log.levels.INFO
-
-	local ok, notify_lib = pcall(require, "notify")
-	if ok then
-		-- Use 'nvim-notify' if available
-		notify_lib(msg, level, {
-			title = "Java Creator",
-			timeout = M.config.options.notification_timeout,
-		})
-	else
-		-- Fallback to the standard vim.notify
-		vim.notify(msg, level, { title = "Java Creator", level = level })
-	end
-end
-
----
---- Displays an error message.
----
----@param msg string The error message.
-local function error(msg)
-	notify(msg, vim.log.levels.ERROR)
-end
-
----
---- Displays an informational message.
----
----@param msg string The info message.
-local function info(msg)
-	notify(msg, vim.log.levels.INFO)
-end
 
 ---
 --- Validates if a string is a valid Java identifier and not a keyword.
@@ -290,7 +245,7 @@ local function determine_source_directory_and_package()
 	local source_dir, package_name = determine_source_directory_and_package_from_path(current_dir)
 
 	if source_dir and package_name then
-		log.info("Found source dir " .. source_dir .. " and package " .. package_name .. " from path " .. current_dir)
+		log.trace("Found source dir " .. source_dir .. " and package " .. package_name .. " from path " .. current_dir)
 		return source_dir, package_name
 	end
 
@@ -299,7 +254,7 @@ local function determine_source_directory_and_package()
 	source_dir, package_name = determine_source_directory_and_package_from_buffer(current_buffer)
 
 	if source_dir and package_name then
-		log.info("Found source dir " .. source_dir .. " and package " .. package_name .. " from current buffer")
+		log.trace("Found source dir " .. source_dir .. " and package " .. package_name .. " from current buffer")
 		return source_dir, package_name
 	end
 
@@ -399,19 +354,19 @@ end
 function M.create_java_file(java_type, name, source_dir, package_name)
 	local valid, err = validate_java_name(name)
 	if not valid then
-		error("Invalid name: " .. err)
+		log.error("Invalid name: " .. err)
 		return
 	end
 
 	local file_path = source_dir .. "/" .. name .. ".java"
 	if vim.fn.filereadable(file_path) == 1 then
-		error("File already exists: " .. file_path)
+		log.error("File already exists: " .. file_path)
 		return
 	end
 
 	local template = M.config.templates[java_type]
 	if not template then
-		error("Template not found for type: " .. java_type)
+		log.error("Template not found for type: " .. java_type)
 		return
 	end
 
@@ -419,19 +374,15 @@ function M.create_java_file(java_type, name, source_dir, package_name)
 
 	local file = io.open(file_path, "w")
 	if not file then
-		error("Could not create file: " .. file_path)
+		log.error("Could not create file: " .. file_path)
 		return
 	end
 
 	file:write(content)
 	file:close()
 
-	if M.config.options.auto_open then
-		vim.cmd("edit " .. file_path)
-		vim.api.nvim_win_set_cursor(0, { cursor_line, cursor_col })
-	end
-
-	info(string.format("Created %s: %s", java_type, file_path))
+	vim.cmd("edit " .. file_path)
+	vim.api.nvim_win_set_cursor(0, { cursor_line, cursor_col })
 end
 
 ---
@@ -441,7 +392,7 @@ end
 function M.java_new()
 	get_java_type(function(java_type)
 		if not java_type then
-			info("Java file creation canceled.")
+			log.trace("Java file creation canceled.")
 			return
 		end
 
@@ -456,7 +407,7 @@ end
 function M.create_java_type_direct(java_type)
 	input.get_string("Name for " .. java_type .. ": ", "", function(name)
 		if not name or name == "" then
-			error("Name is required.")
+			log.error("Name is required.")
 			return
 		end
 
@@ -519,7 +470,7 @@ function M.setup(opts)
 		end
 	end
 
-	info("Java Creator plugin loaded")
+	log.trace("Java Creator plugin loaded")
 end
 
 return M
