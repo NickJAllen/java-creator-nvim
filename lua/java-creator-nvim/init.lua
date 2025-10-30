@@ -396,7 +396,7 @@ function M.java_new()
 			return
 		end
 
-		M.create_java_type_direct(java_type)
+		M.create_java_type(java_type)
 	end)
 end
 
@@ -404,7 +404,7 @@ end
 --- Creates a specific Java type directly, asking only for name and package.
 ---
 ---@param java_type string The type of file to create (e.g., 'class').
-function M.create_java_type_direct(java_type)
+function M.create_java_type(java_type)
 	input.get_string("Name for " .. java_type .. ": ", "", function(name)
 		if not name or name == "" then
 			log.error("Name is required.")
@@ -419,22 +419,22 @@ end
 
 --- Shortcut function to create a Java class.
 function M.java_class()
-	M.create_java_type_direct("class")
+	M.create_java_type("class")
 end
 
 --- Shortcut function to create a Java interface.
 function M.java_interface()
-	M.create_java_type_direct("interface")
+	M.create_java_type("interface")
 end
 
 --- Shortcut function to create a Java enum.
 function M.java_enum()
-	M.create_java_type_direct("enum")
+	M.create_java_type("enum")
 end
 
 --- Shortcut function to create a Java record.
 function M.java_record()
-	M.create_java_type_direct("record")
+	M.create_java_type("record")
 end
 
 ---
